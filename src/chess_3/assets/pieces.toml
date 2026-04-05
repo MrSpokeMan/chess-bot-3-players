@@ -1,0 +1,28 @@
+# pieces.toml
+# Stats for all piece types. Each player uses the same base stats.
+# life  = hit points (how many hits before captured)
+# power = damage dealt per attack
+
+[pieces.pawn]
+life  = 1
+power = 1
+
+[pieces.knight]
+life  = 2
+power = 3
+
+[pieces.bishop]
+life  = 1
+power = 3
+
+[pieces.rook]
+life  = 3
+power = 4
+
+[pieces.queen]
+life  = 4
+power = 5
+
+[pieces.king]
+life  = 5
+power = 3
