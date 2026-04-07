@@ -27,16 +27,36 @@ HEX_RADIUS = CELL_SIZE * 4.0
 class CoordSystem:
     """Converts between board coordinates and pixel positions."""
 
+    def __init__(self, width: int = 1280, height: int = 800) -> None:
+        self._center_x = float(BOARD_CENTER[0])
+        self._center_y = float(BOARD_CENTER[1])
+        self._hex_radius = float(HEX_RADIUS)
+        self._label_offset = 40.0
+        self.set_viewport(width, height)
+
+    def set_viewport(self, width: int, height: int) -> None:
+        """Recompute board geometry to fill the available viewport."""
+        self._center_x = width * 0.5
+        self._center_y = height * 0.47
+        self._hex_radius = max(150.0, min(width * 0.34, height * 0.42))
+        self._label_offset = max(24.0, self._hex_radius * 0.12)
+
+    def board_center(self) -> tuple[float, float]:
+        return self._center_x, self._center_y
+
+    def label_offset(self) -> float:
+        return self._label_offset
+
     def coord_to_pixel(self, coord: Coord) -> tuple[int, int]:
         """Return the center pixel (x, y) of a board cell."""
-        p00, p10, p01, p11 = _section_quad(coord.section)
+        p00, p10, p01, p11 = self._section_quad(coord.section)
         u, v = _cell_uv(coord.row, coord.col)
         x, y = _bilinear_quad(p00, p10, p01, p11, u, v)
         return int(round(x)), int(round(y))
 
     def cell_corners(self, coord: Coord) -> list[tuple[float, float]]:
         """Return four polygon corners for a board cell in draw order."""
-        p00, p10, p01, p11 = _section_quad(coord.section)
+        p00, p10, p01, p11 = self._section_quad(coord.section)
         u0 = coord.col / COLS_PER_SECTION
         u1 = (coord.col + 1) / COLS_PER_SECTION
         v0 = coord.row / ROWS_PER_SECTION
@@ -81,60 +101,56 @@ class CoordSystem:
 
         return None
 
+    def edge_midpoints(self) -> list[tuple[float, float]]:
+        return _edge_midpoints(self._hex_vertices())
+
+    def player_base_midpoint(self, player: int) -> tuple[float, float]:
+        return self.edge_midpoints()[(2 * player) % 6]
+
+    def _section_quad(
+        self,
+        section: int,
+    ) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float], tuple[float, float]]:
+        """Return bilinear quad corners (P00, P10, P01, P11) for one section."""
+        vertices = self._hex_vertices()
+        mids = _edge_midpoints(vertices)
+        center = (self._center_x, self._center_y)
+
+        player = section // 2
+        is_right = (section % 2) == 1
+
+        # Base edges 1/3/5 => start vertices V0/V2/V4
+        va_idx = (2 * player) % 6
+        vb_idx = (va_idx + 1) % 6
+        base_edge_idx = (2 * player) % 6
+        prev_gap_idx = (base_edge_idx - 1) % 6
+        next_gap_idx = (base_edge_idx + 1) % 6
+
+        va = vertices[va_idx]
+        vb = vertices[vb_idx]
+        m_base = mids[base_edge_idx]
+        m_prev_gap = mids[prev_gap_idx]
+        m_next_gap = mids[next_gap_idx]
+
+        if is_right:
+            return m_base, vb, center, m_next_gap
+        return va, m_base, m_prev_gap, center
+
+    def _hex_vertices(self) -> list[tuple[float, float]]:
+        """Regular hex vertices ordered counter-clockwise from bottom-left."""
+        angles_deg = [240.0, 300.0, 0.0, 60.0, 120.0, 180.0]
+        return [
+            (
+                self._center_x + self._hex_radius * math.cos(math.radians(a)),
+                self._center_y - self._hex_radius * math.sin(math.radians(a)),
+            )
+            for a in angles_deg
+        ]
+
 
 def _cell_uv(row: int, col: int) -> tuple[float, float]:
     """Cell-center coordinates in a 4x4 Cartesian grid."""
     return (col + 0.5) / COLS_PER_SECTION, (row + 0.5) / ROWS_PER_SECTION
-
-
-def _section_quad(
-    section: int,
-) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float], tuple[float, float]]:
-    """Return bilinear quad corners (P00, P10, P01, P11) for one section.
-
-    Sections are paired per player:
-    - player 0: sections 0 (left), 1 (right) on edge 1
-    - player 1: sections 2 (left), 3 (right) on edge 3
-    - player 2: sections 4 (left), 5 (right) on edge 5
-    """
-    vertices = _hex_vertices()
-    mids = _edge_midpoints(vertices)
-    center = (float(BOARD_CENTER[0]), float(BOARD_CENTER[1]))
-
-    player = section // 2
-    is_right = (section % 2) == 1
-
-    # Base edges 1/3/5 => start vertices V0/V2/V4
-    va_idx = (2 * player) % 6
-    vb_idx = (va_idx + 1) % 6
-    base_edge_idx = (2 * player) % 6  # 0-based edge index for edges 1/3/5
-    prev_gap_idx = (base_edge_idx - 1) % 6
-    next_gap_idx = (base_edge_idx + 1) % 6
-
-    va = vertices[va_idx]
-    vb = vertices[vb_idx]
-    m_base = mids[base_edge_idx]
-    m_prev_gap = mids[prev_gap_idx]
-    m_next_gap = mids[next_gap_idx]
-
-    if is_right:
-        # (x=0,y=0)->m_base, (4,0)->vb, (0,4)->center, (4,4)->m_next_gap
-        return m_base, vb, center, m_next_gap
-
-    # (x=0,y=0)->va, (4,0)->m_base, (0,4)->m_prev_gap, (4,4)->center
-    return va, m_base, m_prev_gap, center
-
-
-def _hex_vertices() -> list[tuple[float, float]]:
-    """Regular hex vertices ordered counter-clockwise from bottom-left."""
-    angles_deg = [240.0, 300.0, 0.0, 60.0, 120.0, 180.0]
-    return [
-        (
-            BOARD_CENTER[0] + HEX_RADIUS * math.cos(math.radians(a)),
-            BOARD_CENTER[1] - HEX_RADIUS * math.sin(math.radians(a)),
-        )
-        for a in angles_deg
-    ]
 
 
 def _edge_midpoints(vertices: list[tuple[float, float]]) -> list[tuple[float, float]]:
