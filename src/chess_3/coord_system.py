@@ -1,108 +1,182 @@
-"""Coordinate system for the tri-hex board.
+"""Coordinate system for a flat regular-hex 3-player board.
 
-Owns all pixel <-> board coordinate conversion.
-All hit-testing MUST go through pixel_to_coord — never use pygame.Rect.collidepoint
-on rotated sections (it only works for axis-aligned rectangles).
-
-Board geometry (locked 2026-04-05):
-- 6 sections × 4×4 = 96 squares total
-- Sections numbered 0–5, each rotated 60° clockwise from the previous
-- Section 0 at top, sections proceed clockwise
+Construction:
+- Outer boundary is a regular hexagon with flat top and bottom edges.
+- Player bases lie on edges 1, 3, 5; gap edges are 2, 4, 6.
+- The board is divided into 6 bilinear quadrilaterals (two per player).
+- Each logical 4x4 section maps into one quadrilateral.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
 
 from chess_3.coords import Coord
 
-# Board layout constants — confirmed geometry, do not change without updating STATE.md
-CELL_SIZE = 56        # pixels per cell side
-BOARD_CENTER = (640, 400)  # pixel center of the full board
-
-# Distance from board center to each section's origin (center of its 4×4 grid)
-_RADIUS = 190  # pixels
-
-# Section origins and rotation angles — 6 sections at 60° intervals, starting from top
+CELL_SIZE = 56
+BOARD_CENTER = (640, 400)
 S_ROTATIONS: list[float] = [0.0, 60.0, 120.0, 180.0, 240.0, 300.0]
 
-S_ORIGINS: list[tuple[float, float]] = [
-    (
-        BOARD_CENTER[0] + _RADIUS * math.sin(math.radians(angle)),
-        BOARD_CENTER[1] - _RADIUS * math.cos(math.radians(angle)),
-    )
-    for angle in S_ROTATIONS
-]
-
-# Grid dimensions per section (locked geometry)
 ROWS_PER_SECTION = 4
 COLS_PER_SECTION = 4
 
+# Circumradius of the outer regular hexagon.
+HEX_RADIUS = CELL_SIZE * 4.0
+
 
 class CoordSystem:
-    """Converts between board coordinates and pixel positions.
-
-    All rendering and hit-testing should use this class.
-    """
+    """Converts between board coordinates and pixel positions."""
 
     def coord_to_pixel(self, coord: Coord) -> tuple[int, int]:
         """Return the center pixel (x, y) of a board cell."""
-        ox, oy = S_ORIGINS[coord.section]
-        angle = math.radians(S_ROTATIONS[coord.section])
+        p00, p10, p01, p11 = _section_quad(coord.section)
+        u, v = _cell_uv(coord.row, coord.col)
+        x, y = _bilinear_quad(p00, p10, p01, p11, u, v)
+        return int(round(x)), int(round(y))
 
-        # Local offset from section center (before rotation)
-        lx = (coord.col - (COLS_PER_SECTION - 1) / 2) * CELL_SIZE
-        ly = (coord.row - (ROWS_PER_SECTION - 1) / 2) * CELL_SIZE
+    def cell_corners(self, coord: Coord) -> list[tuple[float, float]]:
+        """Return four polygon corners for a board cell in draw order."""
+        p00, p10, p01, p11 = _section_quad(coord.section)
+        u0 = coord.col / COLS_PER_SECTION
+        u1 = (coord.col + 1) / COLS_PER_SECTION
+        v0 = coord.row / ROWS_PER_SECTION
+        v1 = (coord.row + 1) / ROWS_PER_SECTION
 
-        # Rotate around section origin
-        rx = lx * math.cos(angle) - ly * math.sin(angle)
-        ry = lx * math.sin(angle) + ly * math.cos(angle)
-
-        return int(ox + rx), int(oy + ry)
+        return [
+            _bilinear_quad(p00, p10, p01, p11, u0, v0),
+            _bilinear_quad(p00, p10, p01, p11, u1, v0),
+            _bilinear_quad(p00, p10, p01, p11, u1, v1),
+            _bilinear_quad(p00, p10, p01, p11, u0, v1),
+        ]
 
     def pixel_to_coord(self, px: int, py: int) -> Coord | None:
-        """Find the board cell nearest to a pixel, or None if outside all sections.
+        """Find the board cell containing a pixel, or nearest cell near edges."""
+        inside_best: Coord | None = None
+        inside_best_dist = float("inf")
+        nearest: Coord | None = None
+        nearest_dist = float("inf")
 
-        Uses inverse rotation per section and grid snapping.
-        Never use pygame.Rect.collidepoint for this — it fails on rotated sections.
-        """
-        best_dist = float("inf")
-        best_coord: Coord | None = None
+        for section in range(6):
+            for row in range(ROWS_PER_SECTION):
+                for col in range(COLS_PER_SECTION):
+                    coord = Coord(section, row, col)
+                    corners = self.cell_corners(coord)
+                    cx, cy = self.coord_to_pixel(coord)
+                    dist = (px - cx) ** 2 + (py - cy) ** 2
 
-        for sec in range(6):
-            ox, oy = S_ORIGINS[sec]
-            angle = math.radians(-S_ROTATIONS[sec])  # inverse rotation
+                    if _point_in_convex_quad(float(px), float(py), corners):
+                        if dist < inside_best_dist:
+                            inside_best_dist = dist
+                            inside_best = coord
 
-            dx, dy = px - ox, py - oy
-            lx = dx * math.cos(angle) - dy * math.sin(angle)
-            ly = dx * math.sin(angle) + dy * math.cos(angle)
+                    if dist < nearest_dist:
+                        nearest_dist = dist
+                        nearest = coord
 
-            # Convert to grid coordinates
-            col_f = lx / CELL_SIZE + (COLS_PER_SECTION - 1) / 2
-            row_f = ly / CELL_SIZE + (ROWS_PER_SECTION - 1) / 2
+        if inside_best is not None:
+            return inside_best
 
-            # Check bounds
-            if not (-0.5 <= col_f < COLS_PER_SECTION + 0.5 and -0.5 <= row_f < ROWS_PER_SECTION + 0.5):
-                continue
+        if nearest is not None and nearest_dist <= (CELL_SIZE * 0.95) ** 2:
+            return nearest
 
-            # Snap to nearest cell
-            col_i = int(round(col_f))
-            row_i = int(round(row_f))
+        return None
 
-            # Clamp to valid range
-            col_i = max(0, min(COLS_PER_SECTION - 1, col_i))
-            row_i = max(0, min(ROWS_PER_SECTION - 1, row_i))
 
-            # Distance from snapped cell center (in grid units)
-            dist = (col_f - col_i) ** 2 + (row_f - row_i) ** 2
+def _cell_uv(row: int, col: int) -> tuple[float, float]:
+    """Cell-center coordinates in a 4x4 Cartesian grid."""
+    return (col + 0.5) / COLS_PER_SECTION, (row + 0.5) / ROWS_PER_SECTION
 
-            if dist < best_dist:
-                best_dist = dist
-                best_coord = Coord(sec, row_i, col_i)
 
-        # Reject if too far from any cell center (more than half a cell away)
-        if best_dist > 0.5:
-            return None
+def _section_quad(
+    section: int,
+) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float], tuple[float, float]]:
+    """Return bilinear quad corners (P00, P10, P01, P11) for one section.
 
-        return best_coord
+    Sections are paired per player:
+    - player 0: sections 0 (left), 1 (right) on edge 1
+    - player 1: sections 2 (left), 3 (right) on edge 3
+    - player 2: sections 4 (left), 5 (right) on edge 5
+    """
+    vertices = _hex_vertices()
+    mids = _edge_midpoints(vertices)
+    center = (float(BOARD_CENTER[0]), float(BOARD_CENTER[1]))
+
+    player = section // 2
+    is_right = (section % 2) == 1
+
+    # Base edges 1/3/5 => start vertices V0/V2/V4
+    va_idx = (2 * player) % 6
+    vb_idx = (va_idx + 1) % 6
+    base_edge_idx = (2 * player) % 6  # 0-based edge index for edges 1/3/5
+    prev_gap_idx = (base_edge_idx - 1) % 6
+    next_gap_idx = (base_edge_idx + 1) % 6
+
+    va = vertices[va_idx]
+    vb = vertices[vb_idx]
+    m_base = mids[base_edge_idx]
+    m_prev_gap = mids[prev_gap_idx]
+    m_next_gap = mids[next_gap_idx]
+
+    if is_right:
+        # (x=0,y=0)->m_base, (4,0)->vb, (0,4)->center, (4,4)->m_next_gap
+        return m_base, vb, center, m_next_gap
+
+    # (x=0,y=0)->va, (4,0)->m_base, (0,4)->m_prev_gap, (4,4)->center
+    return va, m_base, m_prev_gap, center
+
+
+def _hex_vertices() -> list[tuple[float, float]]:
+    """Regular hex vertices ordered counter-clockwise from bottom-left."""
+    angles_deg = [240.0, 300.0, 0.0, 60.0, 120.0, 180.0]
+    return [
+        (
+            BOARD_CENTER[0] + HEX_RADIUS * math.cos(math.radians(a)),
+            BOARD_CENTER[1] - HEX_RADIUS * math.sin(math.radians(a)),
+        )
+        for a in angles_deg
+    ]
+
+
+def _edge_midpoints(vertices: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Edge midpoints for edges 1..6 with vertex order from _hex_vertices()."""
+    mids: list[tuple[float, float]] = []
+    for i in range(6):
+        x1, y1 = vertices[i]
+        x2, y2 = vertices[(i + 1) % 6]
+        mids.append(((x1 + x2) / 2.0, (y1 + y2) / 2.0))
+    return mids
+
+
+def _bilinear_quad(
+    p00: tuple[float, float],
+    p10: tuple[float, float],
+    p01: tuple[float, float],
+    p11: tuple[float, float],
+    u: float,
+    v: float,
+) -> tuple[float, float]:
+    """Standard bilinear interpolation over a quadrilateral."""
+    a00 = (1.0 - u) * (1.0 - v)
+    a10 = u * (1.0 - v)
+    a01 = (1.0 - u) * v
+    a11 = u * v
+    x = p00[0] * a00 + p10[0] * a10 + p01[0] * a01 + p11[0] * a11
+    y = p00[1] * a00 + p10[1] * a10 + p01[1] * a01 + p11[1] * a11
+    return x, y
+
+
+def _point_in_convex_quad(px: float, py: float, corners: list[tuple[float, float]]) -> bool:
+    """Return True if a point is inside/on the boundary of a convex quadrilateral."""
+    sign = 0
+    for idx in range(4):
+        x1, y1 = corners[idx]
+        x2, y2 = corners[(idx + 1) % 4]
+        cross = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1)
+        if abs(cross) < 1e-7:
+            continue
+        current = 1 if cross > 0 else -1
+        if sign == 0:
+            sign = current
+        elif current != sign:
+            return False
+    return True
