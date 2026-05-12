@@ -5,7 +5,7 @@ import chess
 import torch
 
 from life_board import LifeBoard
-from main import board_to_tensor
+from utils import board_to_tensor
 from model import ChessNet
 
 
@@ -19,18 +19,19 @@ class AIPlayer:
         self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.model.eval()
 
-    def get_best_move(self, board):
+    def get_best_move(self, life_board):
         best_move = None
+        board = life_board.board
         best_eval = 1e9 if board.turn == chess.BLACK else -1e9
 
         for move in board.legal_moves:
-            board.push(move)
-            tensor = board_to_tensor(board).unsqueeze(0).to(self.device)
+            life_board.push(move)
+            tensor = board_to_tensor(life_board).unsqueeze(0).to(self.device)
 
             with torch.no_grad():
                 val = self.model(tensor).item()
 
-            board.pop()
+            life_board.pop()
 
             if board.turn == chess.WHITE:
                 if val > best_eval:
@@ -232,7 +233,7 @@ class ChessGUI:
 
     def ai_move(self):
         self.root.title("AI thinking...")
-        move = self.ai.get_best_move(self.life_board.board)
+        move = self.ai.get_best_move(self.life_board)
 
         if move:
             self.life_board.push(move)
@@ -259,7 +260,7 @@ if __name__ == "__main__":
     root.title("Chess AI")
 
     try:
-        ai = AIPlayer("chess_model_epoch_14.pth")
+        ai = AIPlayer("models/chess_model-life-board_1_loss_0.2578.pth")
         gui = ChessGUI(root, ai)
         root.mainloop()
     except FileNotFoundError:
