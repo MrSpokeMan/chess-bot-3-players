@@ -1,0 +1,20 @@
+[project]
+name = "chess-bot-3-players"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "chess>=1.11.2",
+    "numpy>=1.24,<2.0",
+    "torch>=2.0.1",
+    "tqdm>=4.67.3",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu117" }
+
+[[tool.uv.index]]
+name = "pytorch-cu117"
+url = "https://download.pytorch.org/whl/cu117"
+explicit = true

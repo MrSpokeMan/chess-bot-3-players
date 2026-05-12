@@ -6,7 +6,7 @@ class ChessNet(nn.Module):
         super().__init__()
 
         self.conv = nn.Sequential(
-            nn.Conv2d(13, 64, 3, padding=1),
+            nn.Conv2d(25, 64, 3, padding=1),
             nn.ReLU(),
             nn.Conv2d(64, 128, 3, padding=1),
             nn.ReLU(),
