@@ -1,6 +1,5 @@
-import tkinter as tk
-from tkinter import messagebox
-
+import customtkinter as ctk
+import tkinter.messagebox as messagebox
 import chess
 import torch
 
@@ -8,10 +7,13 @@ from life_board import LifeBoard
 from utils import board_to_tensor
 from model import ChessNet
 
+from themes import ThemeManager, GameConfig
+from ui_menu import StartMenu
+from ui_board import ChessBoardUI
 
-# ==========================================
-# AI
-# ==========================================
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
 class AIPlayer:
     def __init__(self, model_path):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -42,226 +44,164 @@ class AIPlayer:
 
         return best_move
 
-
-# ==========================================
-# GUI
-# ==========================================
-class ChessGUI:
-    CELL = 60
-
-    def __init__(self, root, ai):
-        self.root = root
-        self.ai = ai
+class GameApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("Immortal Kings")
+        self.geometry("1420x700")
+        self.minsize(900, 600)
+        
+        self.config = GameConfig()
+        
         self.life_board = LifeBoard()
+        try:
+            self.ai = AIPlayer("models/chess_model-life-board_1_loss_0.2578.pth")
+        except FileNotFoundError:
+            print("Warning: Model file not found. AI moves will fail.")
+            self.ai = None
 
         self.selected_square = None
         self.last_move = None
+        
+        self.show_menu()
 
-        self.bg = "#202124"
-        self.light = "#f0d9b5"
-        self.dark = "#b58863"
-        self.highlight = "#f6f669"
-        self.arrow_color = "#4aa3ff"
+    def show_menu(self):
+        for widget in self.winfo_children():
+            widget.destroy()
+            
+        self.configure(fg_color="#121212")
+        self.menu_frame = StartMenu(self, self.config, self.start_game)
+        self.menu_frame.pack(fill="both", expand=True, padx=100, pady=50)
 
-        root.configure(bg=self.bg)
+    def start_game(self):
+        self.menu_frame.destroy()
+        
+        self.theme = ThemeManager.get_theme(self.config.theme_name)
+        self.configure(fg_color=self.theme["bg"])
 
-        frame = tk.Frame(root, bg=self.bg)
-        frame.pack(padx=20, pady=20)
+        title_font = ctk.CTkFont(family="Segoe UI", size=24, weight="bold")
+        subtitle_font = ctk.CTkFont(family="Segoe UI", size=14)
+        queue_font = ctk.CTkFont(family="Segoe UI Symbol", size=34)
 
-        size = self.CELL * 8
-        self.canvas = tk.Canvas(
-            frame, width=size, height=size, bg=self.bg, highlightthickness=0
-        )
-        self.canvas.grid(row=0, column=1)
+        self.game_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.game_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        self.left_panel = tk.Frame(frame, bg=self.bg, width=120)
-        self.left_panel.grid(row=0, column=0, padx=10, sticky="n")
+        self.left_panel = ctk.CTkFrame(self.game_frame, width=300, corner_radius=20, fg_color=self.theme["panel_bg"])
+        self.left_panel.pack(side="left", fill="y", padx=(0, 35))
+        self.left_panel.pack_propagate(False)
+        
+        ctk.CTkLabel(self.left_panel, text="PLAYER 1", font=title_font, text_color=self.theme["text_white"]).pack(anchor="w", padx=28, pady=(30, 5))
+        
+        ctk.CTkLabel(self.left_panel, text="Human Player", font=subtitle_font, text_color="#8a8a8a").pack(anchor="w", padx=30)
+        ctk.CTkLabel(self.left_panel, text="WHITE QUEUE", font=subtitle_font, text_color="#9c9c9c").pack(anchor="w", padx=30, pady=(45, 8))
+        
+        self.lbl_white_queue = ctk.CTkLabel(self.left_panel, text="—", font=queue_font, text_color=self.theme["text_white"])
+        self.lbl_white_queue.pack(anchor="w", padx=30)
 
-        self.right_panel = tk.Frame(frame, bg=self.bg, width=120)
-        self.right_panel.grid(row=0, column=2, padx=10, sticky="n")
+        # ---- CENTER BOARD ----
+        self.board_container = ctk.CTkFrame(self.game_frame, corner_radius=10, fg_color="transparent")
+        self.board_container.pack(side="left", fill="both", expand=True)
+        
+        self.board_ui = ChessBoardUI(self.board_container, self.theme, self.handle_click)
+        self.board_ui.pack(fill="both", expand=True)
 
-        tk.Label(
-            self.left_panel, text="White queue", fg="#aaa", bg=self.bg,
-            font=("Arial", 10, "bold"),
-        ).pack(anchor="w")
-        self.white_queue_label = tk.Label(
-            self.left_panel, text="", fg="white", bg=self.bg, font=("Arial", 20),
-            wraplength=110, justify="left",
-        )
-        self.white_queue_label.pack(anchor="w")
+        # ---- RIGHT PANEL (Black/AI) ----
+        self.right_panel = ctk.CTkFrame(self.game_frame, width=300, corner_radius=20, fg_color=self.theme["panel_bg"])
+        self.right_panel.pack(side="right", fill="y", padx=(35, 0))
+        self.right_panel.pack_propagate(False)
+        
+        ctk.CTkLabel(self.right_panel, text="AI OPPONENT", font=title_font, text_color=self.theme["text_white"]).pack(anchor="w", padx=28, pady=(30, 5))
+        
+        ctk.CTkLabel(self.right_panel, text="Neural Network", font=subtitle_font, text_color="#8a8a8a").pack(anchor="w", padx=30)
+        ctk.CTkLabel(self.right_panel, text="BLACK QUEUE", font=subtitle_font, text_color="#9c9c9c").pack(anchor="w", padx=30, pady=(45, 8))
+        
+        self.lbl_black_queue = ctk.CTkLabel(self.right_panel, text="—", font=queue_font, text_color=self.theme["text_white"])
+        self.lbl_black_queue.pack(anchor="w", padx=30)
 
-        tk.Label(
-            self.right_panel, text="Black queue", fg="#aaa", bg=self.bg,
-            font=("Arial", 10, "bold"),
-        ).pack(anchor="w")
-        self.black_queue_label = tk.Label(
-            self.right_panel, text="", fg="white", bg=self.bg, font=("Arial", 20),
-            wraplength=110, justify="left",
-        )
-        self.black_queue_label.pack(anchor="w")
+        back_btn = ctk.CTkButton(self.right_panel, text="ABORT MATCH", height=44, corner_radius=12, font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"), fg_color="#ab3333", hover_color="#802424", command=self.reset_to_menu)
+        back_btn.pack(side="bottom", pady=20, padx=20)
 
-        self.canvas.bind("<Button-1>", self.on_click)
+        self.update_view()
 
-        self.draw_board()
-        self.update_queue_display()
-
-    # ------------------------------------------------------------------
-    # drawing
-    # ------------------------------------------------------------------
-
-    def draw_board(self):
-        self.canvas.delete("all")
-        cell = self.CELL
-
-        for r in range(8):
-            for c in range(8):
-                x1, y1 = c * cell, (7 - r) * cell
-                x2, y2 = x1 + cell, y1 + cell
-                sq = chess.square(c, r)
-
-                color = self.light if (r + c) % 2 == 0 else self.dark
-                self.canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
-
-                piece = self.life_board.piece_at(sq)
-                if piece:
-                    self.canvas.create_text(
-                        x1 + cell // 2,
-                        y1 + cell // 2,
-                        text=piece.unicode_symbol(),
-                        font=("Segoe UI Symbol", 36),
-                        fill="#111" if piece.color == chess.WHITE else "#000",
-                    )
-                    self._draw_life_bar(x1, y1, x2, y2, sq, piece)
-
-        self.draw_last_move()
-        self.draw_arrow(self.last_move)
-
-    def _draw_life_bar(self, x1, y1, x2, y2, sq, piece):
-        if piece.piece_type == chess.KING:
+    def handle_click(self, square):
+        if self.life_board.board.turn == chess.BLACK:
             return
 
-        state = self.life_board.piece_state_at(sq)
-        if state is None or state.max_life <= 1:
-            return
+        piece = self.life_board.piece_at(square)
 
-        ratio = state.life / state.max_life
-        bar_color = (
-            "#4caf50" if ratio > 0.6
-            else "#ff9800" if ratio > 0.3
-            else "#f44336"
-        )
-        bar_h = 4
-        bar_w = int(ratio * (x2 - x1))
-        self.canvas.create_rectangle(
-            x1, y2 - bar_h, x1 + bar_w, y2, fill=bar_color, outline=""
-        )
-
-        self.canvas.create_text(
-            x2 - 3, y1 + 3,
-            text=str(state.life),
-            font=("Arial", 7, "bold"),
-            fill="#222",
-            anchor="ne",
-        )
-
-    def draw_last_move(self):
-        if not self.last_move:
-            return
-        for sq in [self.last_move.from_square, self.last_move.to_square]:
-            c = chess.square_file(sq)
-            r = chess.square_rank(sq)
-            x1, y1 = c * self.CELL, (7 - r) * self.CELL
-            x2, y2 = x1 + self.CELL, y1 + self.CELL
-            self.canvas.create_rectangle(
-                x1, y1, x2, y2, fill=self.highlight, stipple="gray25", outline=""
-            )
-
-    def draw_arrow(self, move):
-        if not move:
-            return
-        cell = self.CELL
-        f, t = move.from_square, move.to_square
-        fc, fr = chess.square_file(f), chess.square_rank(f)
-        tc, tr = chess.square_file(t), chess.square_rank(t)
-        self.canvas.create_line(
-            fc * cell + cell // 2, (7 - fr) * cell + cell // 2,
-            tc * cell + cell // 2, (7 - tr) * cell + cell // 2,
-            width=3, fill=self.arrow_color, arrow=tk.LAST,
-        )
-
-    def update_queue_display(self):
-        queue = self.life_board.respawn_queue
-        white = "".join(s.chess_piece.unicode_symbol() for s in queue if s.chess_piece.color == chess.WHITE)
-        black = "".join(s.chess_piece.unicode_symbol() for s in queue if s.chess_piece.color == chess.BLACK)
-        self.white_queue_label.config(text=white or "—")
-        self.black_queue_label.config(text=black or "—")
-
-    # ------------------------------------------------------------------
-    # interaction
-    # ------------------------------------------------------------------
-
-    def on_click(self, event):
-        cell = self.CELL
-        col, row = event.x // cell, 7 - (event.y // cell)
-        square = chess.square(col, row)
-
-        if self.selected_square is None:
-            piece = self.life_board.piece_at(square)
-            if piece and piece.color == self.life_board.turn:
-                self.selected_square = square
-        else:
+        if self.selected_square is not None:
             move = chess.Move(self.selected_square, square)
-
-            piece = self.life_board.piece_at(self.selected_square)
-            if piece and piece.piece_type == chess.PAWN and (row == 7 or row == 0):
+            
+            if piece and piece.piece_type == chess.PAWN and (chess.square_rank(square) == 7 or chess.square_rank(square) == 0):
                 move.promotion = chess.QUEEN
 
-            if move in self.life_board.legal_moves:
+            if move in self.life_board.board.legal_moves:
                 self.life_board.push(move)
                 self.last_move = move
-
-                self.draw_board()
-                self.update_queue_display()
-                self.root.update()
-
-                if not self.life_board.is_game_over():
+                self.selected_square = None
+                self.update_view()
+                self.update() 
+                
+                if not self.check_game_over():
                     self.ai_move()
+            else:
+                if piece and piece.color == self.life_board.board.turn:
+                    self.selected_square = square
+                else:
+                    self.selected_square = None
 
-            self.selected_square = None
-            self.draw_board()
-            self.check_game_over()
+        else:
+            if piece and piece.color == self.life_board.board.turn:
+                self.selected_square = square
+
+        self.update_view()
 
     def ai_move(self):
-        self.root.title("AI thinking...")
+        if not self.ai: return
+        
+        self.title("Resurrection Chess - AI Thinking...")
         move = self.ai.get_best_move(self.life_board)
 
         if move:
             self.life_board.push(move)
             self.last_move = move
 
-        self.root.title("Chess AI")
-        self.draw_board()
-        self.update_queue_display()
+        self.title("Resurrection Chess")
+        self.update_view()
+        self.check_game_over()
 
     def check_game_over(self):
         if self.life_board.is_game_over():
             res = self.life_board.result()
             messagebox.showinfo("Game Over", f"Result: {res}")
+            self.reset_to_menu()
+            return True
+        return False
 
-            self.life_board.reset()
-            self.last_move = None
+    def update_view(self):
+        queue = self.life_board.respawn_queue
+        white = "".join(s.chess_piece.unicode_symbol() for s in queue if s.chess_piece.color == chess.WHITE)
+        black = "".join(s.chess_piece.unicode_symbol() for s in queue if s.chess_piece.color == chess.BLACK)
+        self.lbl_white_queue.configure(text=white or "—")
+        self.lbl_black_queue.configure(text=black or "—")
 
-            self.draw_board()
-            self.update_queue_display()
+        valid_moves = []
+        if self.selected_square is not None:
+            valid_moves = [m for m in self.life_board.board.legal_moves if m.from_square == self.selected_square]
 
+        self.board_ui.update_state(
+            life_board=self.life_board, 
+            selected_square=self.selected_square, 
+            valid_moves=valid_moves, 
+            last_move=self.last_move
+        )
+
+    def reset_to_menu(self):
+        self.life_board.reset()
+        self.last_move = None
+        self.selected_square = None
+        self.show_menu()
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    root.title("Chess AI")
-
-    try:
-        ai = AIPlayer("models/chess_model-life-board_1_loss_0.2578.pth")
-        gui = ChessGUI(root, ai)
-        root.mainloop()
-    except FileNotFoundError:
-        print("Model file not found.")
+    app = GameApp()
+    app.mainloop()
