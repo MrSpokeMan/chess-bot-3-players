@@ -60,7 +60,7 @@ class ThemeManager:
             "arrow": "#40c4ff"
         },
 
-        "PWR": {
+        "Wrocław Tech": {
             "bg": "#000000",
             "panel_bg": "#0a0a0a",
 
@@ -87,6 +87,5 @@ class ThemeManager:
 class GameConfig:
     def __init__(self):
         self.theme_name = "Classical"
-        self.use_timers = False
-        self.human_time = 600  # seconds
-        self.ai_time = 600     # seconds
+        self.player_name = "Player 1"
+        self.player_side = "White"

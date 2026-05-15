@@ -1,4 +1,6 @@
+import os
 import customtkinter as ctk
+from PIL import Image
 from themes import ThemeManager
 
 class StartMenu(ctk.CTkFrame):
@@ -7,41 +9,72 @@ class StartMenu(ctk.CTkFrame):
         self.config = config
         self.on_start = on_start_callback
 
-        title = ctk.CTkLabel(self, text="Chess AI", 
-                             font=ctk.CTkFont(family="Helvetica", size=36, weight="bold"))
-        title.pack(pady=(60, 40))
+        self.grid_columnconfigure(0, weight=2) 
+        self.grid_columnconfigure(1, weight=3) 
+        self.grid_rowconfigure(0, weight=1)
 
-        settings_frame = ctk.CTkFrame(self, corner_radius=15)
-        settings_frame.pack(pady=20, padx=40, fill="both", expand=True)
+        self.left_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.left_container.grid(row=0, column=0, sticky="nsew")
 
-        ctk.CTkLabel(settings_frame, text="SELECT BOARD THEME", 
-                     font=ctk.CTkFont(size=14, weight="bold"), text_color="gray").pack(pady=(20, 10))
-        
+        try:
+            logo_path = os.path.join("assets", "logo.png")
+            logo_img = ctk.CTkImage(light_image=Image.open(logo_path),
+                                    dark_image=Image.open(logo_path),
+                                    size=(250, 250))
+            self.logo_label = ctk.CTkLabel(self.left_container, image=logo_img, text="")
+            self.logo_label.pack(expand=True, pady=(20, 0), anchor="s") 
+        except Exception:
+            pass 
+
+        self.title = ctk.CTkLabel(
+            self.left_container, 
+            text="IMMORTAL\nKINGS", 
+            font=ctk.CTkFont(family="Segoe UI Symbol", size=40, weight="bold")
+        )
+        self.title.pack(expand=True, pady=(0, 20), anchor="n")
+
+        self.right_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.right_container.grid(row=0, column=1, sticky="nsew", padx=(0, 40))
+
+        self.right_content = ctk.CTkFrame(self.right_container, fg_color="transparent")
+        self.right_content.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.9)
+
+        settings_frame = ctk.CTkFrame(self.right_content, corner_radius=20, fg_color=("#ebebeb", "#1e1e1e"))
+        settings_frame.pack(fill="x", pady=10)
+
+        sections = [
+            ("PLAYER IDENTIFIER", self._create_name_entry),
+            ("ASSIGNED SIDE", self._create_side_selector),
+            ("INTERFACE THEME", self._create_theme_menu)
+        ]
+
+        for label_text, creator_func in sections:
+            ctk.CTkLabel(settings_frame, text=label_text, text_color="gray",
+                         font=ctk.CTkFont(family="Segoe UI Symbol", size=14, weight="bold")).pack(pady=(15, 0))
+            creator_func(settings_frame)
+
+        self.start_btn = ctk.CTkButton(self.right_content, text="INITIATE SEQUENCE", 
+                                      font=ctk.CTkFont(family="Segoe UI Symbol", size=16, weight="bold"),
+                                      height=50, fg_color="#d32f2f", hover_color="#b71c1c",
+                                      command=self._start_game)
+        self.start_btn.pack(fill="x", pady=(10, 0))
+
+    def _create_name_entry(self, p):
+        self.name_entry = ctk.CTkEntry(p, placeholder_text="Enter Name...", width=320, height=35)
+        self.name_entry.pack(pady=(5, 15))
+
+    def _create_side_selector(self, p):
+        self.side_var = ctk.StringVar(value="White")
+        self.side_selector = ctk.CTkSegmentedButton(p, values=["White", "Black"], variable=self.side_var, height=35)
+        self.side_selector.pack(pady=(5, 15), padx=20, fill="x")
+
+    def _create_theme_menu(self, p):
         self.theme_var = ctk.StringVar(value=self.config.theme_name)
-        themes_frame = ctk.CTkFrame(settings_frame, fg_color="transparent")
-        themes_frame.pack(pady=10)
-        
-        for theme in ThemeManager.THEMES.keys():
-            rad = ctk.CTkRadioButton(themes_frame, text=theme, variable=self.theme_var, 
-                                     value=theme, font=ctk.CTkFont(size=14))
-            rad.pack(side="left", padx=15)
-
-        ctk.CTkLabel(settings_frame, text="GAME RULES", 
-                     font=ctk.CTkFont(size=14, weight="bold"), text_color="gray").pack(pady=(30, 10))
-        
-        self.timer_switch = ctk.CTkSwitch(settings_frame, text="Enable Match Timers", 
-                                          font=ctk.CTkFont(size=14))
-        self.timer_switch.pack(pady=10)
-        if self.config.use_timers:
-            self.timer_switch.select()
-
-        start_btn = ctk.CTkButton(self, text="INITIATE SEQUENCE", 
-                                  font=ctk.CTkFont(size=16, weight="bold"), 
-                                  height=50, corner_radius=8, command=self._start_game)
-        start_btn.pack(pady=40)
-
+        self.theme_menu = ctk.CTkOptionMenu(p, values=list(ThemeManager.THEMES.keys()), variable=self.theme_var)
+        self.theme_menu.pack(pady=(5, 25), padx=20, fill="x")
+    
     def _start_game(self):
         self.config.theme_name = self.theme_var.get()
-        self.config.use_timers = self.timer_switch.get() == 1
+        self.config.player_name = self.name_entry.get() or "Player 1"
+        self.config.player_side = self.side_var.get()
         self.on_start()
-        

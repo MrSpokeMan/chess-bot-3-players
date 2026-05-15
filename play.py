@@ -2,7 +2,10 @@ import customtkinter as ctk
 import tkinter.messagebox as messagebox
 import chess
 import torch
+import sys
+import os
 
+from game_over import GameOverModal
 from life_board import LifeBoard
 from utils import board_to_tensor
 from model import ChessNet
@@ -51,8 +54,9 @@ class GameApp(ctk.CTk):
         self.geometry("1250x600")
         self.minsize(1250, 600)
         
+        self._setup_app_icon()
+
         self.config = GameConfig()
-        
         self.life_board = LifeBoard()
         try:
             self.ai = AIPlayer("models/chess_model-life-board_1_loss_0.2578.pth")
@@ -86,7 +90,6 @@ class GameApp(ctk.CTk):
         self.game_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.game_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # ---- LEFT PANEL (Fixed Width) ----
         self.left_panel = ctk.CTkFrame(self.game_frame, width=300, corner_radius=20, fg_color=self.theme["panel_bg"])
         self.left_panel.pack(side="left", fill="y", padx=(0, 20))
         self.left_panel.pack_propagate(False)
@@ -98,7 +101,6 @@ class GameApp(ctk.CTk):
         self.lbl_white_queue = ctk.CTkLabel(self.left_panel, text="—", font=queue_font, text_color=self.theme["text_white"])
         self.lbl_white_queue.pack(anchor="w", padx=30)
 
-        # ---- RIGHT PANEL (Fixed Width) - Packed BEFORE center so the center expands correctly ----
         self.right_panel = ctk.CTkFrame(self.game_frame, width=300, corner_radius=20, fg_color=self.theme["panel_bg"])
         self.right_panel.pack(side="right", fill="y", padx=(20, 0))
         self.right_panel.pack_propagate(False)
@@ -113,24 +115,19 @@ class GameApp(ctk.CTk):
         back_btn = ctk.CTkButton(self.right_panel, text="ABORT MATCH", height=44, corner_radius=12, font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"), fg_color="#ab3333", hover_color="#802424", command=self.reset_to_menu)
         back_btn.pack(side="bottom", pady=20, padx=20)
 
-        # ---- CENTER BOARD CONTAINER (Expands to fill remaining space) ----
         self.board_container = ctk.CTkFrame(self.game_frame, fg_color="transparent")
         self.board_container.pack(side="left", fill="both", expand=True)
         
-        # We use .place() to float the board exactly in the center of the container
         self.board_ui = ChessBoardUI(self.board_container, self.theme, self.handle_click)
         self.board_ui.place(relx=0.5, rely=0.5, anchor="center")
 
-        # Bind container resize to perfectly scale the board
         self.board_container.bind("<Configure>", self.on_container_resize)
 
         self.update_view()
 
     def on_container_resize(self, event):
-        # Calculate the smallest dimension to ensure the board remains a perfect square
         size = min(event.width, event.height)
         
-        # Update canvas boundaries and tell it to recalculate its internal cell sizes
         self.board_ui.configure(width=size, height=size)
         self.board_ui.update_size(size)
 
@@ -170,22 +167,42 @@ class GameApp(ctk.CTk):
     def ai_move(self):
         if not self.ai: return
         
-        self.title("Resurrection Chess - AI Thinking...")
+        self.title("Immortal Kings...")
         move = self.ai.get_best_move(self.life_board)
 
         if move:
             self.life_board.push(move)
             self.last_move = move
 
-        self.title("Resurrection Chess")
+        self.title("Immortal Kings")
         self.update_view()
         self.check_game_over()
 
     def check_game_over(self):
         if self.life_board.is_game_over():
-            res = self.life_board.result()
-            messagebox.showinfo("Game Over", f"Result: {res}")
-            self.reset_to_menu()
+            outcome = self.life_board.outcome()
+            result = self.life_board.result()
+            
+            if outcome:
+                reason = outcome.termination.name.replace("_", " ").title()
+            else:
+                reason = "Game Over"
+
+            if result == "1-0":
+                winner = self.config.player_name if self.config.player_side == "White" else "AI Opponent"
+            elif result == "0-1":
+                winner = self.config.player_name if self.config.player_side == "Black" else "AI Opponent"
+            else:
+                winner = "Draw"
+
+            GameOverModal(
+                parent=self,
+                winner_name=winner,
+                total_moves=self.life_board.board.fullmove_number,
+                result_type=reason,
+                theme=self.theme,
+                on_close=self.reset_to_menu
+            )
             return True
         return False
 
@@ -212,6 +229,32 @@ class GameApp(ctk.CTk):
         self.last_move = None
         self.selected_square = None
         self.show_menu()
+    
+    def _setup_app_icon(self):
+        try:
+            if sys.platform.startswith("win"):
+                import ctypes
+
+                myappid = "immortal.kings.chess.v1"
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+
+                icon_path = os.path.join("assets", "logo.ico")
+
+                if os.path.exists(icon_path):
+                    self.iconbitmap(icon_path)
+
+            else:
+                from PIL import Image, ImageTk
+
+                icon_path = os.path.join("assets", "logo.png")
+
+                if os.path.exists(icon_path):
+                    img = Image.open(icon_path)
+                    self.photo = ImageTk.PhotoImage(img)
+                    self.iconphoto(True, self.photo)
+
+        except Exception as e:
+            print(f"Icon initialization failed: {e}")
 
 if __name__ == "__main__":
     app = GameApp()
