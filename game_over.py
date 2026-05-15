@@ -8,7 +8,7 @@ class GameOverModal(ctk.CTkToplevel):
         self.title("Match Summary")
         self.on_close = on_close
         
-        self.attributes("-topmost", True)  # Ensure it's above the board
+        self.attributes("-topmost", True)  
         self.configure(fg_color=theme["bg"])
         self.resizable(False, False)
         

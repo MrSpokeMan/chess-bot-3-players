@@ -94,7 +94,7 @@ class GameApp(ctk.CTk):
         self.left_panel.pack(side="left", fill="y", padx=(0, 20))
         self.left_panel.pack_propagate(False)
         
-        ctk.CTkLabel(self.left_panel, text="PLAYER 1", font=title_font, text_color=self.theme["text_white"]).pack(anchor="w", padx=28, pady=(30, 5))
+        ctk.CTkLabel(self.left_panel, text=self.config.player_name, font=title_font, text_color=self.theme["text_white"]).pack(anchor="w", padx=28, pady=(30, 5))
         ctk.CTkLabel(self.left_panel, text="Human Player", font=subtitle_font, text_color="#8a8a8a").pack(anchor="w", padx=30)
         ctk.CTkLabel(self.left_panel, text="WHITE QUEUE", font=subtitle_font, text_color="#9c9c9c").pack(anchor="w", padx=30, pady=(45, 8))
         
@@ -123,6 +123,11 @@ class GameApp(ctk.CTk):
 
         self.board_container.bind("<Configure>", self.on_container_resize)
 
+        self.human_color = chess.WHITE if self.config.player_side == "White" else chess.BLACK
+        self.ai_color = not self.human_color
+        if self.human_color == chess.BLACK:
+            self.after(300, self.ai_move)
+
         self.update_view()
 
     def on_container_resize(self, event):
@@ -132,7 +137,7 @@ class GameApp(ctk.CTk):
         self.board_ui.update_size(size)
 
     def handle_click(self, square):
-        if self.life_board.board.turn == chess.BLACK:
+        if self.life_board.board.turn != self.human_color:
             return
 
         piece = self.life_board.piece_at(square)
@@ -150,7 +155,7 @@ class GameApp(ctk.CTk):
                 self.update_view()
                 self.update() 
                 
-                if not self.check_game_over():
+                if self.life_board.board.turn == self.ai_color and not self.check_game_over():
                     self.ai_move()
             else:
                 if piece and piece.color == self.life_board.board.turn:
@@ -165,7 +170,12 @@ class GameApp(ctk.CTk):
         self.update_view()
 
     def ai_move(self):
-        if not self.ai: return
+        def ai_move(self):
+            if not self.ai:
+                return
+
+            if self.life_board.board.turn != self.ai_color:
+                return
         
         self.title("Immortal Kings...")
         move = self.ai.get_best_move(self.life_board)
