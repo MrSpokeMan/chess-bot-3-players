@@ -48,8 +48,8 @@ class GameApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Immortal Kings")
-        self.geometry("1420x700")
-        self.minsize(900, 600)
+        self.geometry("1250x600")
+        self.minsize(1250, 600)
         
         self.config = GameConfig()
         
@@ -86,32 +86,24 @@ class GameApp(ctk.CTk):
         self.game_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.game_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
+        # ---- LEFT PANEL (Fixed Width) ----
         self.left_panel = ctk.CTkFrame(self.game_frame, width=300, corner_radius=20, fg_color=self.theme["panel_bg"])
-        self.left_panel.pack(side="left", fill="y", padx=(0, 35))
+        self.left_panel.pack(side="left", fill="y", padx=(0, 20))
         self.left_panel.pack_propagate(False)
         
         ctk.CTkLabel(self.left_panel, text="PLAYER 1", font=title_font, text_color=self.theme["text_white"]).pack(anchor="w", padx=28, pady=(30, 5))
-        
         ctk.CTkLabel(self.left_panel, text="Human Player", font=subtitle_font, text_color="#8a8a8a").pack(anchor="w", padx=30)
         ctk.CTkLabel(self.left_panel, text="WHITE QUEUE", font=subtitle_font, text_color="#9c9c9c").pack(anchor="w", padx=30, pady=(45, 8))
         
         self.lbl_white_queue = ctk.CTkLabel(self.left_panel, text="—", font=queue_font, text_color=self.theme["text_white"])
         self.lbl_white_queue.pack(anchor="w", padx=30)
 
-        # ---- CENTER BOARD ----
-        self.board_container = ctk.CTkFrame(self.game_frame, corner_radius=10, fg_color="transparent")
-        self.board_container.pack(side="left", fill="both", expand=True)
-        
-        self.board_ui = ChessBoardUI(self.board_container, self.theme, self.handle_click)
-        self.board_ui.pack(fill="both", expand=True)
-
-        # ---- RIGHT PANEL (Black/AI) ----
+        # ---- RIGHT PANEL (Fixed Width) - Packed BEFORE center so the center expands correctly ----
         self.right_panel = ctk.CTkFrame(self.game_frame, width=300, corner_radius=20, fg_color=self.theme["panel_bg"])
-        self.right_panel.pack(side="right", fill="y", padx=(35, 0))
+        self.right_panel.pack(side="right", fill="y", padx=(20, 0))
         self.right_panel.pack_propagate(False)
         
         ctk.CTkLabel(self.right_panel, text="AI OPPONENT", font=title_font, text_color=self.theme["text_white"]).pack(anchor="w", padx=28, pady=(30, 5))
-        
         ctk.CTkLabel(self.right_panel, text="Neural Network", font=subtitle_font, text_color="#8a8a8a").pack(anchor="w", padx=30)
         ctk.CTkLabel(self.right_panel, text="BLACK QUEUE", font=subtitle_font, text_color="#9c9c9c").pack(anchor="w", padx=30, pady=(45, 8))
         
@@ -121,7 +113,26 @@ class GameApp(ctk.CTk):
         back_btn = ctk.CTkButton(self.right_panel, text="ABORT MATCH", height=44, corner_radius=12, font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"), fg_color="#ab3333", hover_color="#802424", command=self.reset_to_menu)
         back_btn.pack(side="bottom", pady=20, padx=20)
 
+        # ---- CENTER BOARD CONTAINER (Expands to fill remaining space) ----
+        self.board_container = ctk.CTkFrame(self.game_frame, fg_color="transparent")
+        self.board_container.pack(side="left", fill="both", expand=True)
+        
+        # We use .place() to float the board exactly in the center of the container
+        self.board_ui = ChessBoardUI(self.board_container, self.theme, self.handle_click)
+        self.board_ui.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Bind container resize to perfectly scale the board
+        self.board_container.bind("<Configure>", self.on_container_resize)
+
         self.update_view()
+
+    def on_container_resize(self, event):
+        # Calculate the smallest dimension to ensure the board remains a perfect square
+        size = min(event.width, event.height)
+        
+        # Update canvas boundaries and tell it to recalculate its internal cell sizes
+        self.board_ui.configure(width=size, height=size)
+        self.board_ui.update_size(size)
 
     def handle_click(self, square):
         if self.life_board.board.turn == chess.BLACK:

@@ -1,61 +1,61 @@
 class ThemeManager:
     THEMES = {
         "Classical": {
-            "bg": "#2b2b2b",
-            "panel_bg": "#1e1e1e",
+            "bg": "#1e1e1e",
+            "panel_bg": "#252525",
 
             "text_white": "#ffffff",
-            "text_black": "#111111",
+            "text_black": "#2c2c2c",
 
-            "light": "#F0D9B5",
-            "dark": "#B58863",
+            "light": "#f0d9b5",
+            "dark": "#b58863",
 
-            "highlight": "#7C4D00",
+            "highlight": "#7c4d00",
             "valid_move": "#6aa84f",
             "arrow": "#4aa3ff"
         },
 
         "Neon": {
-            "bg": "#050510",
-            "panel_bg": "#0b0b1a",
+            "bg": "#0a0a12",
+            "panel_bg": "#141425",
 
-            "text_white": "#00fff0",
-            "text_black": "#ff2bd6",
+            "text_white": "#00aeef",
+            "text_black": "#ec008c",
 
-            "light": "#2b00ff",
-            "dark": "#0a0047",
+            "light": "#1f1f3d",
+            "dark": "#0f0f23",
 
-            "highlight": "#007070",
+            "highlight": "#3d3d5c",
             "valid_move": "#00ffcc",
             "arrow": "#ff007f"
         },
 
         "Medieval": {
             "bg": "#1a1410",
-            "panel_bg": "#120e0b",
+            "panel_bg": "#2a1f19",
 
-            "text_white": "#F5F0E6",
-            "text_black": "#1A0F08",
+            "text_white": "#f5f0e6",
+            "text_black": "#2a1b12",
 
-            "light": "#E7D2B0",
-            "dark": "#8B5A2B",
+            "light": "#dcb35c",
+            "dark": "#8b4513",
 
-            "highlight": "#4B2E00",
-            "valid_move": "#6B8E23",
+            "highlight": "#4b2e00",
+            "valid_move": "#6b8e23",
             "arrow": "#C0A060"
         },
 
         "Dark": {
-            "bg": "#121212",
-            "panel_bg": "#1b1b1b",
+            "bg": "#0d0d0d",
+            "panel_bg": "#1a1a1a",
 
-            "text_white": "#bdbdbd",
-            "text_black": "#0a0a0a",
+            "text_white": "#e0e0e0",
+            "text_black": "#121212",
 
-            "light": "#5a5a5a",
-            "dark": "#3a3a3a",
+            "light": "#404040",
+            "dark": "#2b2b2b",
 
-            "highlight": "#000000",
+            "highlight": "#555555",
             "valid_move": "#4caf50",
             "arrow": "#40c4ff"
         },
@@ -64,14 +64,14 @@ class ThemeManager:
             "bg": "#000000",
             "panel_bg": "#0a0a0a",
 
-            "text_white": "#BE7200",
-            "text_black": "#2b0f0c",
+            "text_white": "#F1D1A2",
+            "text_black": "#3d0000",
 
             "light": "#F1D1A2",
-            "dark": "#9A342D",
+            "dark": "#9C352D",
 
-            "highlight": "#6D3100",
-            "valid_move": "#290300",
+            "highlight": "#ff4d4d",
+            "valid_move": "#d4611e",
             "arrow": "#F1D1A2"
         }
     }

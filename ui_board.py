@@ -1,5 +1,7 @@
 # ui_board.py
 import tkinter as tk
+from PIL import Image, ImageTk, ImageOps
+import os
 import chess
 
 class ChessBoardUI(tk.Canvas):
@@ -15,15 +17,53 @@ class ChessBoardUI(tk.Canvas):
         self.valid_moves = []
         self.last_move = None
 
-        self.bind("<Configure>", self._on_resize)
+        self.piece_images = {}
+        self.image_refs = {}
+
         self.bind("<Button-1>", self._on_click)
         self.bind("<Motion>", self._on_hover)
         self.bind("<Leave>", self._on_leave)
 
-    def _on_resize(self, event):
-        size = min(event.width, event.height)
-        self.cell_size = size // 8
+    def update_size(self, size):
+        self.cell_size = max(10, size // 8)
+        self.load_piece_images()
         self.draw()
+
+    def load_piece_images(self):
+        self.piece_images.clear()
+        self.image_refs.clear()
+
+        assets_dir = os.path.join("assets", "pieces")
+        if not os.path.exists(assets_dir):
+            return
+
+        color_prefix = {chess.WHITE: 'w', chess.BLACK: 'b'}
+        piece_letters = {chess.PAWN: 'p', chess.KNIGHT: 'n', chess.BISHOP: 'b',
+                         chess.ROOK: 'r', chess.QUEEN: 'q', chess.KING: 'k'}
+        
+        piece_size = int(self.cell_size * 0.85)
+
+        t_white = self.theme.get("text_white", "#ffffff")
+        t_black = self.theme.get("text_black", "#000000")
+
+        for color in [chess.WHITE, chess.BLACK]:
+            for p_type in piece_letters:
+                filename = f'{color_prefix[color]}{piece_letters[p_type]}.png'
+                path = os.path.join(assets_dir, filename)
+
+                if os.path.exists(path):
+                    img = Image.open(path).convert("RGBA")
+                    img = img.resize((piece_size, piece_size), Image.Resampling.LANCZOS)
+
+                    alpha = img.getchannel('A')
+                    gray_piece = img.convert("L")
+
+                    colored_img = ImageOps.colorize(gray_piece, black=t_black, white=t_white)
+                    colored_img.putalpha(alpha)
+                    
+                    tk_img = ImageTk.PhotoImage(colored_img)
+                    self.piece_images[(color, p_type)] = tk_img
+                    self.image_refs[(color, p_type)] = tk_img
 
     def _on_click(self, event):
         col, row = event.x // self.cell_size, 7 - (event.y // self.cell_size)
@@ -84,13 +124,17 @@ class ChessBoardUI(tk.Canvas):
                 if piece:
                     x1, y1 = c * self.cell_size, (7 - r) * self.cell_size
                     x2, y2 = x1 + self.cell_size, y1 + self.cell_size
+                    cx, cy = x1 + self.cell_size // 2, y1 + self.cell_size // 2
                     
-                    self.create_text(
-                        x1 + self.cell_size // 2, y1 + self.cell_size // 2,
-                        text=piece.unicode_symbol(),
-                        font=("Segoe UI Symbol", int(self.cell_size * 0.6)),
-                        fill=self.theme["text_white"] if piece.color == chess.WHITE else "#000000"
-                    )
+                    if (piece.color, piece.piece_type) in self.piece_images:
+                        self.create_image(cx, cy, image=self.piece_images[(piece.color, piece.piece_type)])
+                    else:
+                        self.create_text(
+                            cx, cy, text=piece.unicode_symbol(),
+                            font=("Segoe UI Symbol", int(self.cell_size * 0.6)),
+                            fill=self.theme["text_white"] if piece.color == chess.WHITE else "#000000"
+                        )
+                        
                     self._draw_life_bar(x1, y1, x2, y2, sq, piece)
 
     def _draw_life_bar(self, x1, y1, x2, y2, sq, piece):
@@ -104,7 +148,7 @@ class ChessBoardUI(tk.Canvas):
         ratio = state.life / state.max_life
         bar_color = "#4caf50" if ratio > 0.6 else "#ff9800" if ratio > 0.3 else "#f44336"
         
-        bar_h = max(4, int(self.cell_size * 0.08)) # Scales with board
+        bar_h = max(4, int(self.cell_size * 0.08)) 
         bar_w = int(ratio * (x2 - x1))
         
         self.create_rectangle(x1, y2 - bar_h, x1 + bar_w, y2, fill=bar_color, outline="")
