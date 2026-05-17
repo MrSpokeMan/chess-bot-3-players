@@ -93,6 +93,13 @@ class LifeBoard:
 
     def result(self) -> str:
         return self.board.result()
+    
+    def outcome(self) -> Optional[chess.Outcome]:
+        return self.board.outcome()
+        
+    @property
+    def fullmove_number(self) -> int:
+        return self.board.fullmove_number
 
     @property
     def respawn_queue(self) -> list[PieceState]:
