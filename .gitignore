@@ -1,4 +1,2 @@
-.planning
-*__pycache__*
-.codex
-AGENTS.md
+**/__pycache__/**
+.venv/

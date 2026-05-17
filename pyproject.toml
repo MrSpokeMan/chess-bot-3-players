@@ -1,16 +1,22 @@
 [project]
-name = "chess-3"
+name = "chess-bot-3-players"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.10"
 dependencies = [
-    "pygame-ce>=2.5.1",
+    "chess>=1.11.2",
+    "customtkinter>=5.2.2",
+    "numpy>=1.24,<2.0",
+    "pillow>=12.2.0",
+    "torch>=2.0.1",
+    "tqdm>=4.67.3",
 ]
 
-[dependency-groups]
-dev = ["pytest>=8.0"]
+[tool.uv.sources]
+torch = { index = "pytorch-cu117" }
 
-[build-system]
-requires = ["uv_build>=0.11.3,<0.12.0"]
-build-backend = "uv_build"
+[[tool.uv.index]]
+name = "pytorch-cu117"
+url = "https://download.pytorch.org/whl/cu117"
+explicit = true
