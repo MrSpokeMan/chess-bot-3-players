@@ -66,7 +66,9 @@ class GameApp(ctk.CTk):
 
         self.selected_square = None
         self.last_move = None
-        
+        self.ai_vs_ai_mode = False
+        self._ai_step_id = None
+
         self.show_menu()
 
     def show_menu(self):
@@ -74,12 +76,10 @@ class GameApp(ctk.CTk):
             widget.destroy()
             
         self.configure(fg_color="#121212")
-        self.menu_frame = StartMenu(self, self.config, self.start_game)
+        self.menu_frame = StartMenu(self, self.config, self.start_game, self.start_ai_vs_ai)
         self.menu_frame.pack(fill="both", expand=True, padx=100, pady=50)
 
-    def start_game(self):
-        self.menu_frame.destroy()
-        
+    def _build_game_ui(self, left_title, left_subtitle, right_title, right_subtitle, click_handler):
         self.theme = ThemeManager.get_theme(self.config.theme_name)
         self.configure(fg_color=self.theme["bg"])
 
@@ -93,22 +93,22 @@ class GameApp(ctk.CTk):
         self.left_panel = ctk.CTkFrame(self.game_frame, width=300, corner_radius=20, fg_color=self.theme["panel_bg"])
         self.left_panel.pack(side="left", fill="y", padx=(0, 20))
         self.left_panel.pack_propagate(False)
-        
-        ctk.CTkLabel(self.left_panel, text=self.config.player_name, font=title_font, text_color=self.theme["text_white"]).pack(anchor="w", padx=28, pady=(30, 5))
-        ctk.CTkLabel(self.left_panel, text="Human Player", font=subtitle_font, text_color="#8a8a8a").pack(anchor="w", padx=30)
+
+        ctk.CTkLabel(self.left_panel, text=left_title, font=title_font, text_color=self.theme["text_white"]).pack(anchor="w", padx=28, pady=(30, 5))
+        ctk.CTkLabel(self.left_panel, text=left_subtitle, font=subtitle_font, text_color="#8a8a8a").pack(anchor="w", padx=30)
         ctk.CTkLabel(self.left_panel, text="WHITE QUEUE", font=subtitle_font, text_color="#9c9c9c").pack(anchor="w", padx=30, pady=(45, 8))
-        
+
         self.lbl_white_queue = ctk.CTkLabel(self.left_panel, text="—", font=queue_font, text_color=self.theme["text_white"])
         self.lbl_white_queue.pack(anchor="w", padx=30)
 
         self.right_panel = ctk.CTkFrame(self.game_frame, width=300, corner_radius=20, fg_color=self.theme["panel_bg"])
         self.right_panel.pack(side="right", fill="y", padx=(20, 0))
         self.right_panel.pack_propagate(False)
-        
-        ctk.CTkLabel(self.right_panel, text="AI OPPONENT", font=title_font, text_color=self.theme["text_white"]).pack(anchor="w", padx=28, pady=(30, 5))
-        ctk.CTkLabel(self.right_panel, text="Neural Network", font=subtitle_font, text_color="#8a8a8a").pack(anchor="w", padx=30)
+
+        ctk.CTkLabel(self.right_panel, text=right_title, font=title_font, text_color=self.theme["text_white"]).pack(anchor="w", padx=28, pady=(30, 5))
+        ctk.CTkLabel(self.right_panel, text=right_subtitle, font=subtitle_font, text_color="#8a8a8a").pack(anchor="w", padx=30)
         ctk.CTkLabel(self.right_panel, text="BLACK QUEUE", font=subtitle_font, text_color="#9c9c9c").pack(anchor="w", padx=30, pady=(45, 8))
-        
+
         self.lbl_black_queue = ctk.CTkLabel(self.right_panel, text="—", font=queue_font, text_color=self.theme["text_white"])
         self.lbl_black_queue.pack(anchor="w", padx=30)
 
@@ -117,18 +117,52 @@ class GameApp(ctk.CTk):
 
         self.board_container = ctk.CTkFrame(self.game_frame, fg_color="transparent")
         self.board_container.pack(side="left", fill="both", expand=True)
-        
-        self.board_ui = ChessBoardUI(self.board_container, self.theme, self.handle_click)
+
+        self.board_ui = ChessBoardUI(self.board_container, self.theme, click_handler)
         self.board_ui.place(relx=0.5, rely=0.5, anchor="center")
 
         self.board_container.bind("<Configure>", self.on_container_resize)
 
+    def start_game(self):
+        self.menu_frame.destroy()
+        self.ai_vs_ai_mode = False
+        self._build_game_ui(
+            left_title=self.config.player_name,
+            left_subtitle="Human Player",
+            right_title="AI OPPONENT",
+            right_subtitle="Neural Network",
+            click_handler=self.handle_click,
+        )
         self.human_color = chess.WHITE if self.config.player_side == "White" else chess.BLACK
         self.ai_color = not self.human_color
         if self.human_color == chess.BLACK:
             self.after(300, self.ai_move)
-
         self.update_view()
+
+    def start_ai_vs_ai(self):
+        self.menu_frame.destroy()
+        self.ai_vs_ai_mode = True
+        self._build_game_ui(
+            left_title="WHITE AI",
+            left_subtitle="Neural Network",
+            right_title="BLACK AI",
+            right_subtitle="Neural Network",
+            click_handler=lambda sq: None,
+        )
+        self.update_view()
+        self._ai_step_id = self.after(500, self._ai_vs_ai_step)
+
+    def _ai_vs_ai_step(self):
+        self._ai_step_id = None
+        if not self.ai or self.check_game_over():
+            return
+        move = self.ai.get_best_move(self.life_board)
+        if move:
+            self.life_board.push(move)
+            self.last_move = move
+        self.update_view()
+        if not self.check_game_over():
+            self._ai_step_id = self.after(2000, self._ai_vs_ai_step)
 
     def on_container_resize(self, event):
         size = min(event.width, event.height)
@@ -198,7 +232,14 @@ class GameApp(ctk.CTk):
             else:
                 reason = "Game Over"
 
-            if result == "1-0":
+            if self.ai_vs_ai_mode:
+                if result == "1-0":
+                    winner = "White AI"
+                elif result == "0-1":
+                    winner = "Black AI"
+                else:
+                    winner = "Draw"
+            elif result == "1-0":
                 winner = self.config.player_name if self.config.player_side == "White" else "AI Opponent"
             elif result == "0-1":
                 winner = self.config.player_name if self.config.player_side == "Black" else "AI Opponent"
@@ -235,6 +276,10 @@ class GameApp(ctk.CTk):
         )
 
     def reset_to_menu(self):
+        if self._ai_step_id is not None:
+            self.after_cancel(self._ai_step_id)
+            self._ai_step_id = None
+        self.ai_vs_ai_mode = False
         self.life_board.reset()
         self.last_move = None
         self.selected_square = None
