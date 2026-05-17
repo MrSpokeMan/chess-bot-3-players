@@ -4,10 +4,11 @@ from PIL import Image
 from themes import ThemeManager
 
 class StartMenu(ctk.CTkFrame):
-    def __init__(self, parent, config, on_start_callback):
+    def __init__(self, parent, config, on_start_callback, on_ai_vs_ai_callback):
         super().__init__(parent, fg_color="transparent")
         self.config = config
         self.on_start = on_start_callback
+        self.on_ai_vs_ai = on_ai_vs_ai_callback
 
         self.grid_columnconfigure(0, weight=2) 
         self.grid_columnconfigure(1, weight=3) 
@@ -53,11 +54,19 @@ class StartMenu(ctk.CTkFrame):
                          font=ctk.CTkFont(family="Segoe UI Symbol", size=14, weight="bold")).pack(pady=(15, 0))
             creator_func(settings_frame)
 
-        self.start_btn = ctk.CTkButton(self.right_content, text="INITIATE SEQUENCE", 
+        self.start_btn = ctk.CTkButton(self.right_content, text="INITIATE SEQUENCE",
                                       font=ctk.CTkFont(family="Segoe UI Symbol", size=16, weight="bold"),
                                       height=50, fg_color="#d32f2f", hover_color="#b71c1c",
                                       command=self._start_game)
         self.start_btn.pack(fill="x", pady=(10, 0))
+
+        self.ai_vs_ai_btn = ctk.CTkButton(
+            self.right_content, text="WATCH AI BATTLE",
+            font=ctk.CTkFont(family="Segoe UI Symbol", size=16, weight="bold"),
+            height=50, fg_color="#1565c0", hover_color="#0d47a1",
+            command=self.on_ai_vs_ai
+        )
+        self.ai_vs_ai_btn.pack(fill="x", pady=(8, 0))
 
     def _create_name_entry(self, p):
         self.name_entry = ctk.CTkEntry(p, placeholder_text="Enter Name...", width=320, height=35)
