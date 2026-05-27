@@ -1,4 +1,3 @@
-# ui_board.py
 import tkinter as tk
 from PIL import Image, ImageTk, ImageOps
 import os
@@ -10,8 +9,9 @@ class ChessBoardUI(tk.Canvas):
         self.theme = theme
         self.on_square_click = on_square_click
         
+        self.margin = 5 
         self.cell_size = 60
-        self.life_board = None  # Now expects a LifeBoard instance
+        self.life_board = None  
         self.selected_square = None
         self.hovered_square = None
         self.valid_moves = []
@@ -25,7 +25,8 @@ class ChessBoardUI(tk.Canvas):
         self.bind("<Leave>", self._on_leave)
 
     def update_size(self, size):
-        self.cell_size = max(10, size // 8)
+        self.margin = max(10, int(size * 0.05))
+        self.cell_size = max(10, (size - 2 * self.margin) // 8)
         self.load_piece_images()
         self.draw()
 
@@ -66,12 +67,14 @@ class ChessBoardUI(tk.Canvas):
                     self.image_refs[(color, p_type)] = tk_img
 
     def _on_click(self, event):
-        col, row = event.x // self.cell_size, 7 - (event.y // self.cell_size)
+        col = (event.x - self.margin) // self.cell_size
+        row = 7 - ((event.y - self.margin) // self.cell_size)
         if 0 <= col <= 7 and 0 <= row <= 7:
             self.on_square_click(chess.square(col, row))
 
     def _on_hover(self, event):
-        col, row = event.x // self.cell_size, 7 - (event.y // self.cell_size)
+        col = (event.x - self.margin) // self.cell_size
+        row = 7 - ((event.y - self.margin) // self.cell_size)
         if 0 <= col <= 7 and 0 <= row <= 7:
             sq = chess.square(col, row)
             if self.hovered_square != sq:
@@ -99,10 +102,23 @@ class ChessBoardUI(tk.Canvas):
 
         for r in range(8):
             for c in range(8):
-                x1, y1 = c * self.cell_size, (7 - r) * self.cell_size
+                x1 = self.margin + c * self.cell_size
+                y1 = self.margin + (7 - r) * self.cell_size
                 x2, y2 = x1 + self.cell_size, y1 + self.cell_size
+                
                 color = self.theme["light"] if (r + c) % 2 == 0 else self.theme["dark"]
                 self.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
+
+        coord_color = self.theme.get("text_white", "#ffffff") 
+        coord_font = ("Segoe UI", max(9, int(self.cell_size * 0.18)), "bold")
+
+        for i in range(8):
+            y_mid = self.margin + (7 - i) * self.cell_size + self.cell_size // 2
+            self.create_text(self.margin - 12, y_mid, text=str(i + 1), fill=coord_color, font=coord_font, anchor="e")
+            
+            x_mid = self.margin + i * self.cell_size + self.cell_size // 2
+            board_bottom = self.margin + 8 * self.cell_size
+            self.create_text(x_mid, board_bottom + 10, text=chr(97 + i).upper(), fill=coord_color, font=coord_font, anchor="n")
 
         if self.last_move:
             for sq in [self.last_move.from_square, self.last_move.to_square]:
@@ -122,7 +138,8 @@ class ChessBoardUI(tk.Canvas):
                 piece = self.life_board.piece_at(sq)
                 
                 if piece:
-                    x1, y1 = c * self.cell_size, (7 - r) * self.cell_size
+                    x1 = self.margin + c * self.cell_size
+                    y1 = self.margin + (7 - r) * self.cell_size
                     x2, y2 = x1 + self.cell_size, y1 + self.cell_size
                     cx, cy = x1 + self.cell_size // 2, y1 + self.cell_size // 2
                     
@@ -152,21 +169,33 @@ class ChessBoardUI(tk.Canvas):
         bar_w = int(ratio * (x2 - x1))
         
         self.create_rectangle(x1, y2 - bar_h, x1 + bar_w, y2, fill=bar_color, outline="")
-        self.create_text(
-            x2 - 3, y1 + 3,
-            text=str(state.life),
-            font=("Segoe UI Symbol", max(8, int(self.cell_size * 0.15)), "bold"),
-            fill=self.theme["text_white"],
-            anchor="ne",
-        )
+        
+        x = x2 - 4
+        y = y1
+        text_val = str(state.life)
+        life_font = ("Segoe UI", max(9, int(self.cell_size * 0.16)), "bold")
+        thickness = 1
+
+        for dx in range(-thickness, thickness + 1):
+            for dy in range(-thickness, thickness + 1):
+                if dx == 0 and dy == 0: continue
+                self.create_text(
+                    x + dx, y + dy, text=text_val, font=life_font,
+                    fill=self.theme["text_black"], anchor="ne"
+                )
+
+        self.create_text(x, y, text=text_val, font=life_font, fill=self.theme["text_white"], anchor="ne")
 
     def _highlight_square(self, sq, color, stipple=""):
         c, r = chess.square_file(sq), chess.square_rank(sq)
-        x1, y1 = c * self.cell_size, (7 - r) * self.cell_size
+        x1 = self.margin + c * self.cell_size
+        y1 = self.margin + (7 - r) * self.cell_size
         self.create_rectangle(x1, y1, x1 + self.cell_size, y1 + self.cell_size, fill=color, outline="", stipple=stipple)
 
     def _draw_valid_move_indicator(self, sq):
         c, r = chess.square_file(sq), chess.square_rank(sq)
-        cx, cy = (c + 0.5) * self.cell_size, ((7 - r) + 0.5) * self.cell_size
+        cx = self.margin + (c + 0.5) * self.cell_size
+        cy = self.margin + ((7 - r) + 0.5) * self.cell_size
         radius = self.cell_size * 0.15
         self.create_oval(cx - radius, cy - radius, cx + radius, cy + radius, fill=self.theme["valid_move"], outline="")
+        

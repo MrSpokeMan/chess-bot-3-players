@@ -69,6 +69,8 @@ class GameApp(ctk.CTk):
         self.ai_vs_ai_mode = False
         self._ai_step_id = None
 
+        self.future_moves = []
+
         self.show_menu()
 
     def show_menu(self):
@@ -101,6 +103,10 @@ class GameApp(ctk.CTk):
         self.lbl_white_queue = ctk.CTkLabel(self.left_panel, text="—", font=queue_font, text_color=self.theme["text_white"])
         self.lbl_white_queue.pack(anchor="w", padx=30)
 
+        ctk.CTkLabel(self.left_panel, text="MOVE HISTORY", font=subtitle_font, text_color="#9c9c9c").pack(anchor="w", padx=30, pady=(25, 5))
+        self.white_history_scroll = ctk.CTkScrollableFrame(self.left_panel, fg_color="transparent", corner_radius=0)
+        self.white_history_scroll.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+
         self.right_panel = ctk.CTkFrame(self.game_frame, width=300, corner_radius=20, fg_color=self.theme["panel_bg"])
         self.right_panel.pack(side="right", fill="y", padx=(20, 0))
         self.right_panel.pack_propagate(False)
@@ -115,6 +121,10 @@ class GameApp(ctk.CTk):
         back_btn = ctk.CTkButton(self.right_panel, text="ABORT MATCH", height=44, corner_radius=12, font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"), fg_color="#ab3333", hover_color="#802424", command=self.reset_to_menu)
         back_btn.pack(side="bottom", pady=20, padx=20)
 
+        ctk.CTkLabel(self.right_panel, text="MOVE HISTORY", font=subtitle_font, text_color="#9c9c9c").pack(anchor="w", padx=30, pady=(25, 5))
+        self.black_history_scroll = ctk.CTkScrollableFrame(self.right_panel, fg_color="transparent", corner_radius=0)
+        self.black_history_scroll.pack(fill="both", expand=True, padx=20, pady=0)
+
         self.board_container = ctk.CTkFrame(self.game_frame, fg_color="transparent")
         self.board_container.pack(side="left", fill="both", expand=True)
 
@@ -126,6 +136,7 @@ class GameApp(ctk.CTk):
     def start_game(self):
         self.menu_frame.destroy()
         self.ai_vs_ai_mode = False
+        self.future_moves.clear()
         self._build_game_ui(
             left_title=self.config.player_name,
             left_subtitle="Human Player",
@@ -142,6 +153,7 @@ class GameApp(ctk.CTk):
     def start_ai_vs_ai(self):
         self.menu_frame.destroy()
         self.ai_vs_ai_mode = True
+        self.future_moves.clear()
         self._build_game_ui(
             left_title="WHITE AI",
             left_subtitle="Neural Network",
@@ -156,6 +168,13 @@ class GameApp(ctk.CTk):
         self._ai_step_id = None
         if not self.ai or self.check_game_over():
             return
+        
+        if self.future_moves:
+            while self.future_moves:
+                move = self.future_moves.pop()
+                if move is not None:
+                    self.life_board.push(move)
+
         move = self.ai.get_best_move(self.life_board)
         if move:
             self.life_board.push(move)
@@ -166,11 +185,42 @@ class GameApp(ctk.CTk):
 
     def on_container_resize(self, event):
         size = min(event.width, event.height)
-        
         self.board_ui.configure(width=size, height=size)
         self.board_ui.update_size(size)
 
+    def jump_to_move(self, target_index):
+        total_history = list(self.life_board.board.move_stack) + list(reversed(self.future_moves))
+
+        # Przywróć bezpiecznie do teraźniejszości
+        while self.future_moves:
+            move = self.future_moves.pop()
+            if move is not None:
+                self.life_board.push(move)
+
+        # Cofaj i zapisuj bezpośrednio obiekty ze stosu biblioteki python-chess
+        target_ply = target_index + 1
+        while len(self.life_board.board.move_stack) > target_ply:
+            actual_move = self.life_board.board.move_stack[-1] # Ściągamy ruch bezpośrednio ze stosu
+            self.life_board.pop()
+            self.future_moves.append(actual_move)
+            
+        if 0 <= target_index < len(total_history):
+            self.last_move = total_history[target_index]
+        else:
+            self.last_move = None
+            
+        self.selected_square = None  
+        self.update_view()
+
     def handle_click(self, square):
+        if self.future_moves:
+            while self.future_moves:
+                move = self.future_moves.pop()
+                if move is not None:
+                    self.life_board.push(move)
+            self.update_view()
+            return
+        
         if self.life_board.board.turn != self.human_color:
             return
 
@@ -196,7 +246,6 @@ class GameApp(ctk.CTk):
                     self.selected_square = square
                 else:
                     self.selected_square = None
-
         else:
             if piece and piece.color == self.life_board.board.turn:
                 self.selected_square = square
@@ -204,12 +253,17 @@ class GameApp(ctk.CTk):
         self.update_view()
 
     def ai_move(self):
-        def ai_move(self):
-            if not self.ai:
-                return
+        if not self.ai:
+            return
 
-            if self.life_board.board.turn != self.ai_color:
-                return
+        if self.life_board.board.turn != self.ai_color:
+            return
+            
+        if self.future_moves:
+            while self.future_moves:
+                move = self.future_moves.pop()
+                if move is not None:
+                    self.life_board.push(move)
         
         self.title("Immortal Kings...")
         move = self.ai.get_best_move(self.life_board)
@@ -223,6 +277,9 @@ class GameApp(ctk.CTk):
         self.check_game_over()
 
     def check_game_over(self):
+        if self.future_moves:
+            return False
+        
         if self.life_board.is_game_over():
             outcome = self.life_board.outcome()
             result = self.life_board.result()
@@ -264,8 +321,54 @@ class GameApp(ctk.CTk):
         self.lbl_white_queue.configure(text=white or "—")
         self.lbl_black_queue.configure(text=black or "—")
 
+        for widget in self.white_history_scroll.winfo_children():
+            widget.destroy()
+        for widget in self.black_history_scroll.winfo_children():
+            widget.destroy()
+
+        full_history = list(self.life_board.board.move_stack) + list(reversed(self.future_moves))
+        current_ply = len(self.life_board.board.move_stack)
+
+        temp_board = chess.Board()
+        history_font = ctk.CTkFont(family="Segoe UI", size=13, weight="normal")
+
+        for idx, move in enumerate(full_history):
+            try:
+                san_str = temp_board.san(move)
+                temp_board.push(move)
+            except Exception:
+                san_str = str(move)
+
+            move_num = (idx // 2) + 1
+            is_currently_viewed = (idx == current_ply - 1)
+
+            if is_currently_viewed:
+                bg_color = self.theme.get("highlight", "#1a73e8")
+                text_color = "#ffffff"
+            else:
+                bg_color = "transparent"
+                text_color = "#e0e0e0" if idx % 2 == 0 else "#cccccc"
+
+            btn = ctk.CTkButton(
+                self.white_history_scroll if idx % 2 == 0 else self.black_history_scroll,
+                text=f"{move_num}. {san_str}" if idx % 2 == 0 else f"{move_num}... {san_str}",
+                font=history_font,
+                text_color=text_color,
+                fg_color=bg_color,
+                hover_color="#2c2c2c" if not is_currently_viewed else None,
+                anchor="w",
+                height=28,
+                corner_radius=6,
+                command=lambda i=idx: self.jump_to_move(i)
+            )
+            btn.pack(fill="x", padx=4, pady=2)
+
+        if not self.future_moves:
+            self.after(20, lambda: self.white_history_scroll._parent_canvas.yview_moveto(1.0))
+            self.after(20, lambda: self.black_history_scroll._parent_canvas.yview_moveto(1.0))
+
         valid_moves = []
-        if self.selected_square is not None:
+        if self.selected_square is not None and not self.future_moves:
             valid_moves = [m for m in self.life_board.board.legal_moves if m.from_square == self.selected_square]
 
         self.board_ui.update_state(
@@ -280,6 +383,7 @@ class GameApp(ctk.CTk):
             self.after_cancel(self._ai_step_id)
             self._ai_step_id = None
         self.ai_vs_ai_mode = False
+        self.future_moves.clear()
         self.life_board.reset()
         self.last_move = None
         self.selected_square = None
@@ -292,25 +396,20 @@ class GameApp(ctk.CTk):
 
                 myappid = "immortal.kings.chess.v1"
                 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
-
                 icon_path = os.path.join("assets", "logo.ico")
-
                 if os.path.exists(icon_path):
                     self.iconbitmap(icon_path)
-
             else:
                 from PIL import Image, ImageTk
-
                 icon_path = os.path.join("assets", "logo.png")
-
                 if os.path.exists(icon_path):
                     img = Image.open(icon_path)
                     self.photo = ImageTk.PhotoImage(img)
                     self.iconphoto(True, self.photo)
-
         except Exception as e:
             print(f"Icon initialization failed: {e}")
 
 if __name__ == "__main__":
     app = GameApp()
     app.mainloop()
+    
